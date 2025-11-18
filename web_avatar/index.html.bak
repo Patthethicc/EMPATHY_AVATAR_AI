@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Live2D Avatar</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    #log {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 70vw;
+      max-width: 900px;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 18px;
+      line-height: 1.55;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    #status-bar {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.65);
+      border-radius: 8px;
+      font-size: 13px;
+      color: #cbd5e1;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    #chat-form {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    #chat-input {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.08);
+      color: #e2e8f0;
+      font-size: 15px;
+    }
+    #chat-input:focus {
+      outline: none;
+      border-color: rgba(148, 163, 184, 0.8);
+    }
+    #chat-form button {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #38bdf8;
+      color: #0f172a;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #chat-form button:hover {
+      background: #0ea5e9;
+    }
+    #status {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    #reply {
+      white-space: pre-wrap;
+      font-size: 20px;
+    }
+    canvas {
+      pointer-events: none; /* prevent mouse tracking */
+    }
+  </style>
+  <script>
+    // Stub legacy globals to silence cubism2 runtime checks.
+    window.Live2D = window.Live2D || {};
+    window.Live2DMotion = window.Live2DMotion || function () {};
+    window.Live2DFramework = window.Live2DFramework || { init() {}, getPlatformManager() {}, release() {} };
+  </script>
+  <script src="libs/live2dcubismcore.min.js"></script>
+  <script src="libs/pixi.min.js"></script>
+  <script src="libs/cubism4.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="log">
+    <div id="status">Connecting…</div>
+    <div id="reply"></div>
+    <form id="chat-form">
+      <input id="chat-input" type="text" placeholder="Type a message..." autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+  </div>
+
+  <script>
+    const WS_URL = "ws://localhost:8765";
+    // Change this to your model path under web_avatar/, e.g., "avatar/hiyori.model3.json"
+    const MODEL_PATH = new URLSearchParams(location.search).get("model") || "avatar/runtime/hiyori_pro_t11.model3.json";
+
+    let Live2DModel = null;
+    let model = null;
+
+    const app = new PIXI.Application({
+      autoStart: true,
+      resizeTo: window,
+      backgroundAlpha: 0,
+      backgroundColor: 0x0f172a,
+    });
+    document.getElementById("app").appendChild(app.view);
+
+    const statusEl = document.getElementById("status");
+    const replyEl = document.getElementById("reply");
+    const chatForm = document.getElementById("chat-form");
+    const chatInput = document.getElementById("chat-input");
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+    function setReply(text) {
+      replyEl.textContent = text || "";
+    }
+
+    function ensureLive2D() {
+      if (Live2DModel) return true;
+      if (window.PIXI && window.PIXI.live2d && window.PIXI.live2d.Live2DModel) {
+        Live2DModel = window.PIXI.live2d.Live2DModel;
+        return true;
+      }
+      return false;
+    }
+
+    function fitModel(m) {
+      // Zoom in: crop to upper body. Scale so model height would exceed viewport.
+      const scale = (window.innerHeight * 2.76) / m.height; // ~15% larger than prior 2.4x
+      m.scale.set(scale);
+      // Anchor around chest/shoulders and center horizontally.
+      m.anchor.set(0.5, 0.2);
+      // Lift model slightly upward to keep head in frame while focusing on upper body.
+      m.position.set(window.innerWidth / 2, window.innerHeight * 0.46);
+    }
+
+    async function loadModel() {
+      if (!ensureLive2D()) {
+        setStatus("Live2D plugin not loaded. Check CDN or network.");
+        console.warn("Live2DModel not available", window.PIXI?.live2d);
+        return;
+      }
+      try {
+        console.log("Loading model", MODEL_PATH);
+        model = await Live2DModel.from(MODEL_PATH);
+        console.log("Model loaded", model);
+        // Disable mouse interaction/tracking.
+        model.interactive = false;
+        model.buttonMode = false;
+        model.interactiveChildren = false;
+        if (model.mouseFollow !== undefined) {
+          model.mouseFollow = false;
+        }
+        if (model.focusController) {
+          model.focusController.enabled = false;
+          model.focusController.focus(0, 0);
+        }
+        if (model.internalModel) {
+          const mm = model.internalModel.motionManager;
+          if (mm) {
+            mm._eyeBallX = 0;
+            mm._eyeBallY = 0;
+          }
+          if (model.internalModel.mouseTracker) {
+            model.internalModel.mouseTracker.isEnabled = false;
+            model.internalModel.mouseTracker.tracking = false;
+            model.internalModel.mouseTracker.x = 0;
+            model.internalModel.mouseTracker.y = 0;
+          }
+          if (model.internalModel.focusController) {
+            model.internalModel.focusController.enabled = false;
+            model.internalModel.focusController.focus(0, 0, true);
+          }
+        }
+        app.ticker.add(() => {
+          if (!model || !model.internalModel) return;
+          const mm = model.internalModel.motionManager;
+          if (mm) {
+            mm._eyeBallX = 0;
+            mm._eyeBallY = 0;
+          }
+          const mt = model.internalModel.mouseTracker;
+          if (mt) {
+            mt.isEnabled = false;
+            mt.tracking = false;
+            mt.x = 0;
+            mt.y = 0;
+          }
+          const fc = model.internalModel.focusController;
+          if (fc) {
+            fc.enabled = false;
+            fc.focus(0, 0, true);
+          }
+          const core = model.internalModel.coreModel;
+          if (core) {
+            // Force no drag/follow when supported by the core version being used.
+            if (typeof core.setDragX === "function") core.setDragX(0);
+            if (typeof core.setDragY === "function") core.setDragY(0);
+            core.setParameterValueById("ParamAngleX", 0);
+            core.setParameterValueById("ParamAngleY", 0);
+            core.setParameterValueById("ParamAngleZ", 0);
+            core.setParameterValueById("ParamBodyAngleX", 0);
+          }
+        });
+        fitModel(model);
+        app.stage.addChild(model);
+        // Set a default neutral expression if available.
+        const exprs = listExpressions();
+        if (exprs.includes("Neutral")) {
+          model.expression("Neutral");
+        }
+        setStatus(`Model loaded: ${MODEL_PATH}`);
+      } catch (err) {
+        setStatus(`Failed to load model: ${err}`);
+        console.error("Live2D load error", err);
+      }
+    }
+
+    function listExpressions() {
+      if (!model?.internalModel?.settings?.expressions) return [];
+      return model.internalModel.settings.expressions
+        .map(e => e.name || e.Name)
+        .filter(Boolean);
+    }
+
+    function applyEmotion(emotion) {
+      if (!model) return;
+      const exprMap = {
+        excited: "Happy",
+        happy: "Happy",
+        neutral: "Neutral",
+        concerned: "Concern",
+        sad: "Sad",
+        angry: "Angry",
+      };
+      const target = exprMap[emotion] || "Neutral";
+      const expressions = listExpressions();
+      const match = expressions.find(n => n.toLowerCase() === target.toLowerCase());
+      if (match) {
+        model.expression(match);
+        return;
+      }
+      // Fallback: simple parameter tweaks
+      const core = model.internalModel?.coreModel;
+      if (!core) return;
+      if (emotion === "happy" || emotion === "excited") {
+        core.setParameterValueById("ParamMouthOpenY", 0.7);
+        core.setParameterValueById("ParamEyeSmileLeft", 0.5);
+        core.setParameterValueById("ParamEyeSmileRight", 0.5);
+      } else if (emotion === "sad") {
+        core.setParameterValueById("ParamMouthOpenY", 0.2);
+        core.setParameterValueById("ParamEyeLidUpperLeft", -0.5);
+        core.setParameterValueById("ParamEyeLidUpperRight", -0.5);
+      } else if (emotion === "angry") {
+        core.setParameterValueById("ParamMouthOpenY", 0.4);
+        core.setParameterValueById("ParamBrowDownLeft", 0.5);
+        core.setParameterValueById("ParamBrowDownRight", 0.5);
+      } else {
+        // neutral/concerned fallback
+        core.setParameterValueById("ParamMouthOpenY", 0.3);
+        core.setParameterValueById("ParamBrowDownLeft", 0.1);
+        core.setParameterValueById("ParamBrowDownRight", 0.1);
+      }
+    }
+
+    let ws = null;
+    async function connectWS() {
+      try {
+        ws = new WebSocket(WS_URL);
+        ws.onopen = () => setStatus("Connected to chatbot");
+        ws.onclose = () => setStatus("Disconnected");
+        ws.onerror = () => setStatus("WebSocket error");
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            applyEmotion(data.emotion);
+            setReply(data.reply);
+          } catch (err) {
+            console.error("Invalid message", err);
+          }
+        };
+      } catch (err) {
+        setStatus(`WS connect failed: ${err}`);
+      }
+    }
+
+    chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ text }));
+      chatInput.value = "";
+    });
+
+    window.addEventListener("resize", () => model && fitModel(model));
+
+    loadModel();
+    connectWS();
+  </script>
+</body>
+</html>

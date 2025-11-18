@@ -10,10 +10,11 @@ class TextToSpeech:
     """
 
     def __init__(
-        self, 
+        self,
         voice: str = "en-US-AshleyNeural",
         rate: str = "27%",  # Speed adjustment: -50% to +100%
-        pitch: str = "+45Hz"  # Pitch adjustment: -50Hz to +50Hz
+        pitch: str = "+45Hz",  # Pitch adjustment: -50Hz to +50Hz
+        output_format: speechsdk.SpeechSynthesisOutputFormat = speechsdk.SpeechSynthesisOutputFormat.Audio24Khz160KBitRateMonoMp3,
     ) -> None:
         api_key = os.getenv("AZURE_SPEECH_KEY")
         region = os.getenv("AZURE_SPEECH_REGION", "eastus")
@@ -26,6 +27,8 @@ class TextToSpeech:
             subscription=api_key,
             region=region
         )
+        # Use a higher quality output format to reduce artifacts.
+        speech_config.speech_synthesis_output_format = output_format
         
         # Set the voice
         speech_config.speech_synthesis_voice_name = voice

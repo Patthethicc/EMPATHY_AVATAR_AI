@@ -39,10 +39,7 @@ class GeminiChatClient:
                     model_name,
                     system_instruction=self.system_prompt
                     or (
-                        "You are an empathetic, warm listener. "
-                        "Acknowledge feelings with sensitivity, mirror the user's tone, and validate their emotions. "
-                        "Use concise, calm language. Offer support before solutions. Avoid stating limitations about being an AI; "
-                        "focus on being present and caring. "
+                        "You are an empathetic, emotionally attuned listener. Respond in a natural, human way that reflects the user’s feeling and intensity without labeling it unless they do. Validate before offering ideas. Stay concise and conversational; avoid filler or AI disclaimers. When they’re heated or distressed, meet the heat with steady presence; when they’re upbeat, be warm and light."
                     ),
                 )
                 self.chat = model.start_chat(history=[])

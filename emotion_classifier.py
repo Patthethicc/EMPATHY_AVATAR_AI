@@ -5,6 +5,31 @@ from typing import Dict, Tuple
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
+KEYWORD_MAP = {
+    "angry": "angry",
+    "mad": "angry",
+    "furious": "angry",
+    "rage": "angry",
+    "irritated": "angry",
+    "annoyed": "angry",
+    "upset": "sad",
+    "sad": "sad",
+    "depressed": "sad",
+    "down": "sad",
+    "unhappy": "sad",
+    "happy": "happy",
+    "glad": "happy",
+    "pleased": "happy",
+    "excited": "excited",
+    "thrilled": "excited",
+    "concern": "concerned",
+    "worried": "concerned",
+    "anxious": "concerned",
+    "nervous": "concerned",
+    "uneasy": "concerned",
+    "neutral": "neutral",
+    "calm": "neutral",
+}
 
 EMOTION_TO_EMOJI: Dict[str, str] = {
     "excited": "🤩",
@@ -28,15 +53,24 @@ class EmotionClassifier:
         scores = self.analyzer.polarity_scores(text or "")
         compound = scores.get("compound", 0.0)
 
-        if compound >= 0.65:
+        # Quick keyword override to make intent like "be concerned" map directly.
+        lowered = (text or "").lower()
+        for word, mapped in KEYWORD_MAP.items():
+            if word in lowered:
+                return mapped, compound
+
+        # Tighter neutral band and adjusted cutoffs:
+        # excited: very positive, happy: solid positive, sad/angry: clearer negatives,
+        # concern: mid-level non-neutral that isn't strongly +/-.
+        if compound >= 0.7:
             emotion = "excited"
-        elif compound >= 0.25:
+        elif compound >= 0.45:
             emotion = "happy"
         elif compound <= -0.65:
             emotion = "angry"
-        elif compound <= -0.25:
+        elif compound <= -0.35:
             emotion = "sad"
-        elif -0.15 <= compound <= 0.15:
+        elif -0.05 <= compound <= 0.05:
             emotion = "neutral"
         else:
             emotion = "concerned"
@@ -48,4 +82,3 @@ class EmotionClassifier:
         if emoji and emoji not in text:
             return f"{text} {emoji}"
         return text
-
