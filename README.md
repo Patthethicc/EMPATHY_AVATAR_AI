@@ -13,8 +13,7 @@ Gemini-powered chatbots for the empathy study:
 3) Create a `.env` in this folder:
    ```
    GEMINI_API_KEY=your_google_gemini_key
-   # Optional: pick a model
-   # GEMINI_MODEL=gemini-2.5-flash
+   GEMINI_MODEL=gemini-2.5-flash # can use other models, but highly suggest this one
    # Optional: Azure TTS for spoken replies
    # AZURE_SPEECH_KEY=...
    # AZURE_SPEECH_REGION=eastus
