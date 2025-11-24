@@ -30,8 +30,8 @@ Gemini-powered chatbots for the empathy study:
    Then open http://localhost:8002/emoji.html (WebSocket ws://localhost:8766).
 
 ### Web Live2D setup
-- Place your Live2D model files under `web_avatar/...` and set the path in `web_avatar/index.html` via `MODEL_PATH`, or pass `?model=relative/path/to/your.model3.json` in the URL.
-- Expression names matching the emotion map (`Happy/Neutral/Concern/Sad/Angry`) will be used if present; otherwise the page falls back to simple parameter tweaks.
+- Premade Live2D Sample Model (Hiyori Momose) was used, which is found in `web_avatar`.
+- Expression names matching the emotion map (`Happy/Neutral/Concern/Sad/Angry`) are used. Each expression was manually created via adjusting facial parameters.
 - Status is shown in the top-right; subtitles and chat input are centered at the bottom.
 
 ### How it works
@@ -45,7 +45,6 @@ Gemini-powered chatbots for the empathy study:
 - Adjust sentiment thresholds or emojis in `emotion_classifier.py`.
 - Change speaking speed/voice in `tts.py` (Azure).
 - Pick a different Gemini model via `GEMINI_MODEL` in `.env`.
-- Web avatar: set `MODEL_PATH` in `web_avatar/index.html` or pass `?model=...` in the browser URL; adjust the emotion↔expression map in the JS if names differ.
 
 ### Troubleshooting
 - No expressions: ensure your model has matching `*.exp3.json` entries listed in its `.model3.json`.
